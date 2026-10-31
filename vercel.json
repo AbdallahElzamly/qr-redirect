@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/go/:id", "destination": "/api/index.js" },
+    { "source": "/api/:path*", "destination": "/api/index.js" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+      ]
+    },
+    {
+      "source": "/go/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    }
+  ]
+}
