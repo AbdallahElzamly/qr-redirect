@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة إدارة كيو ار كودز</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { cairo: ['Cairo','sans-serif'] }
+      }
+    }
+  }
+</script>
+<style>
+  body { font-family: 'Cairo', sans-serif; }
+  ::-webkit-scrollbar { width:6px } ::-webkit-scrollbar-track { background:#111 }
+  ::-webkit-scrollbar-thumb { background:#333; border-radius:3px }
+
+  /* QR canvas hidden – we draw on our own canvas */
+  #qrHidden { position:absolute; left:-9999px; top:-9999px; }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+<!-- Hidden QR generator -->
+<div id="qrHidden"></div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed top-4 right-4 z-50 bg-emerald-600 text-white text-sm font-bold px-5 py-3 rounded-xl shadow-xl transition-all"></div>
+
+<!-- ======================================================
+     HEADER
+====================================================== -->
+<header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-10 h-10 bg-black rounded-xl flex items-center justify-center border-2 border-white">
+      <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"/>
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-base font-extrabold text-white leading-tight">QR Redirect Manager</h1>
+      <p class="text-xs text-gray-400">لوحة إدارة كيو ار كودز ديناميكية</p>
+    </div>
+  </div>
+  <div id="statusBadge" class="text-xs text-gray-400 bg-gray-800 px-3 py-1 rounded-full">جاري التحميل...</div>
+</header>
+
+<!-- ======================================================
+     TABS
+====================================================== -->
+<div class="border-b border-gray-800 bg-gray-900">
+  <div class="flex px-4 max-w-6xl mx-auto">
+    <button onclick="switchTab('generate')" id="tab-generate"
+      class="tab-btn active-tab px-5 py-3 text-sm font-bold border-b-2 border-white text-white">
+      🖨️ توليد وتحميل
+    </button>
+    <button onclick="switchTab('manage')" id="tab-manage"
+      class="tab-btn px-5 py-3 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white">
+      ⚙️ إدارة الوجهات
+    </button>
+    <button onclick="switchTab('stats')" id="tab-stats"
+      class="tab-btn px-5 py-3 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white">
+      📊 الإحصائيات
+    </button>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 1: GENERATE QR CODES
+====================================================== -->
+<div id="pane-generate" class="tab-pane max-w-4xl mx-auto px-4 py-8 space-y-6">
+
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5">
+    <h2 class="text-lg font-bold">توليد كيو ار كودات للطباعة</h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">من رقم</label>
+        <input type="number" id="fromNum" value="1" min="1" max="99"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-center font-bold text-lg outline-none focus:border-white">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">إلى رقم</label>
+        <input type="number" id="toNum" value="20" min="1" max="99"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-center font-bold text-lg outline-none focus:border-white">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">حجم الصورة (px)</label>
+        <select id="qrSize" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white outline-none focus:border-white">
+          <option value="300">300 × 300</option>
+          <option value="500" selected>500 × 500</option>
+          <option value="800">800 × 800</option>
+          <option value="1200">1200 × 1200 (طباعة عالية)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Domain preview -->
+    <div class="bg-gray-800/60 rounded-xl p-3 flex items-center gap-2 text-sm">
+      <span class="text-gray-400">رابط كل كيو ار كود:</span>
+      <span id="domainPreview" class="text-emerald-400 font-mono font-bold">https://your-domain.vercel.app/go/</span>
+      <span class="text-white font-bold">[رقم]</span>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+      <button onclick="previewQRs()" 
+        class="bg-gray-700 hover:bg-gray-600 text-white font-bold px-6 py-3 rounded-xl text-sm transition">
+        👁️ معاينة
+      </button>
+      <button onclick="downloadZIP()"
+        class="bg-white text-black font-extrabold px-8 py-3 rounded-xl text-sm hover:bg-gray-200 transition flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        تحميل ZIP
+      </button>
+    </div>
+
+    <!-- Progress bar -->
+    <div id="progressWrap" class="hidden">
+      <div class="flex justify-between text-xs text-gray-400 mb-1">
+        <span>جاري التوليد...</span>
+        <span id="progressTxt">0%</span>
+      </div>
+      <div class="w-full bg-gray-800 rounded-full h-2">
+        <div id="progressBar" class="bg-white h-2 rounded-full transition-all duration-200" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Preview Grid -->
+  <div id="previewGrid" class="hidden">
+    <h3 class="text-sm font-bold text-gray-300 mb-3">معاينة الكيو ار كودات</h3>
+    <div id="previewContainer" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3"></div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 2: MANAGE DESTINATIONS
+====================================================== -->
+<div id="pane-manage" class="tab-pane hidden max-w-6xl mx-auto px-4 py-6">
+
+  <!-- Quick Bulk Assign -->
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6 space-y-4">
+    <h2 class="text-base font-bold">إعداد سريع — تعيين رابط لمجموعة كروت دفعة واحدة</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">من رقم</label>
+        <input type="number" id="bulkFrom" value="1" min="1" max="99"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white outline-none text-sm focus:border-white">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">إلى رقم</label>
+        <input type="number" id="bulkTo" value="10" min="1" max="99"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white outline-none text-sm focus:border-white">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">الرابط الأول (مثلاً Google Reviews)</label>
+        <input type="url" id="bulkPrimary" placeholder="https://g.page/r/..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white outline-none text-sm focus:border-white font-mono">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 block mb-1">الرابط الثاني (مثلاً Facebook) — اختياري</label>
+        <input type="url" id="bulkSecondary" placeholder="https://facebook.com/..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white outline-none text-sm focus:border-white font-mono">
+      </div>
+    </div>
+    <button onclick="bulkAssign()"
+      class="bg-white text-black font-extrabold px-6 py-2.5 rounded-xl text-sm hover:bg-gray-200 transition">
+      ✅ تطبيق على هذه الكروت
+    </button>
+  </div>
+
+  <!-- Cards Table -->
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+    <div class="p-4 flex items-center justify-between border-b border-gray-800">
+      <h2 class="text-sm font-bold">جميع الكروت (1 → 99)</h2>
+      <input type="text" id="searchCards" placeholder="ابحث برقم أو اسم..."
+        class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none w-44 focus:border-white">
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-gray-800/60 text-gray-400">
+          <tr>
+            <th class="px-3 py-3 text-right font-semibold">#</th>
+            <th class="px-3 py-3 text-right font-semibold">الاسم</th>
+            <th class="px-3 py-3 text-right font-semibold">الرابط الأول</th>
+            <th class="px-3 py-3 text-right font-semibold">الرابط الثاني</th>
+            <th class="px-3 py-3 text-center font-semibold">مسحات</th>
+            <th class="px-3 py-3 text-center font-semibold">حفظ</th>
+          </tr>
+        </thead>
+        <tbody id="cardsTable" class="divide-y divide-gray-800/60">
+          <tr><td colspan="6" class="text-center py-8 text-gray-500">جاري التحميل...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 3: STATS
+====================================================== -->
+<div id="pane-stats" class="tab-pane hidden max-w-4xl mx-auto px-4 py-8">
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8" id="kpiRow">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
+      <div class="text-3xl font-extrabold text-white" id="kpiTotal">0</div>
+      <div class="text-xs text-gray-400 mt-1">إجمالي المسحات</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
+      <div class="text-3xl font-extrabold text-emerald-400" id="kpiPrimary">0</div>
+      <div class="text-xs text-gray-400 mt-1">رابط أول (تقييمات)</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
+      <div class="text-3xl font-extrabold text-blue-400" id="kpiSecondary">0</div>
+      <div class="text-xs text-gray-400 mt-1">رابط ثاني (تحويل)</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
+      <div class="text-3xl font-extrabold text-amber-400" id="kpiActive">0</div>
+      <div class="text-xs text-gray-400 mt-1">كروت نشطة</div>
+    </div>
+  </div>
+
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+    <div class="p-4 border-b border-gray-800">
+      <h2 class="text-sm font-bold">ترتيب الكروت حسب الاستخدام</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-gray-800/60 text-gray-400">
+          <tr>
+            <th class="px-4 py-3 text-right">#</th>
+            <th class="px-4 py-3 text-right">الاسم</th>
+            <th class="px-4 py-3 text-center">إجمالي</th>
+            <th class="px-4 py-3 text-center">تقييمات</th>
+            <th class="px-4 py-3 text-center">تحويل</th>
+            <th class="px-4 py-3 text-center">إعادة ضبط</th>
+          </tr>
+        </thead>
+        <tbody id="statsTable" class="divide-y divide-gray-800/60">
+          <tr><td colspan="6" class="text-center py-8 text-gray-500">جاري التحميل...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
