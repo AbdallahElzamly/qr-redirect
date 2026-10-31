@@ -1,31 +1,39 @@
 -- ============================================================
--- QR Redirect System — Supabase Schema
+-- QR Redirect System — Fixed Schema (Drops old table first)
 -- Run this in: Supabase Dashboard → SQL Editor → Run
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS public.cards (
-    id          INT PRIMARY KEY,           -- Card number: 1 to 99
-    label       TEXT DEFAULT '',           -- Optional: restaurant/client name
-    primary_url TEXT NOT NULL DEFAULT '',  -- First redirect (e.g. Google Reviews)
-    secondary_url TEXT DEFAULT '',         -- Second redirect (e.g. Facebook) when already reviewed
-    scan_count  BIGINT DEFAULT 0,          -- Total scans
-    primary_scans BIGINT DEFAULT 0,        -- Scans that went to primary URL
-    secondary_scans BIGINT DEFAULT 0,      -- Scans that went to secondary URL
-    is_active   BOOLEAN DEFAULT TRUE,
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ DEFAULT NOW()
+-- Drop old table if it exists (from previous project)
+DROP TABLE IF EXISTS public.cards CASCADE;
+
+-- Create fresh table with correct columns
+CREATE TABLE public.cards (
+    id              INT PRIMARY KEY,
+    label           TEXT DEFAULT '',
+    primary_url     TEXT NOT NULL DEFAULT '',
+    secondary_url   TEXT DEFAULT '',
+    scan_count      BIGINT DEFAULT 0,
+    primary_scans   BIGINT DEFAULT 0,
+    secondary_scans BIGINT DEFAULT 0,
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Pre-populate cards 1 to 99
-INSERT INTO public.cards (id, primary_url, secondary_url)
+INSERT INTO public.cards (id, label, primary_url, secondary_url)
 SELECT 
-    generate_series(1, 99),
+    n,
+    '',
     '',
     ''
-ON CONFLICT (id) DO NOTHING;
+FROM generate_series(1, 99) AS n;
 
--- Fast lookup index
-CREATE INDEX IF NOT EXISTS idx_cards_id ON public.cards(id);
+-- Index for fast lookup
+CREATE INDEX idx_cards_id ON public.cards(id);
 
--- Disable RLS (public read for redirects, server writes via service role)
+-- Disable RLS (server uses service role key)
 ALTER TABLE public.cards DISABLE ROW LEVEL SECURITY;
+
+-- Verify
+SELECT COUNT(*) AS total_cards FROM public.cards;
